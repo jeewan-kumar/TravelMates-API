@@ -1,0 +1,3 @@
+﻿<Project>
+  <Import Project="..\build\COMMON_PROJECT_STRUCTURE_API.props" />
+</Project>
