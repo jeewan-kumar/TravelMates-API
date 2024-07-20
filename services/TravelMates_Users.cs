@@ -399,7 +399,7 @@ namespace TravelMate_Api.services
                 }
 
                 resData.rData["rCode"] = 0;
-                resData.rData["rMessage"] = "OTP verification successful.";
+                resData.rData["rMessage"] = "SignUP successful.";
             }
             catch (Exception ex)
             {
