@@ -85,6 +85,12 @@ ConfigureServices(s =>
              await http.Response.WriteAsJsonAsync(await TravelMates_SignIn.GenerateOtpForLogin(rData));
         if (rData.eventID == "1003") // VerifyOtpForLogin
              await http.Response.WriteAsJsonAsync(await TravelMates_SignIn.VerifyOtpForLogin(rData));
+         if (rData.eventID == "1004") // ForgotPassword
+             await http.Response.WriteAsJsonAsync(await TravelMates_SignIn.ForgotPassword(rData));
+         if (rData.eventID == "1005") // VerifyOtpForForgotPassword
+             await http.Response.WriteAsJsonAsync(await TravelMates_SignIn.VerifyOtpForForgotPassword(rData));
+         if (rData.eventID == "1006") // ResetPassword
+             await http.Response.WriteAsJsonAsync(await TravelMates_SignIn.ResetPassword(rData));
 
 
      });

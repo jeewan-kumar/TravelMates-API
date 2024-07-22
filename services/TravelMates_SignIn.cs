@@ -364,8 +364,8 @@ namespace TravelMate_Api.services
                         string tableName = isUsingEmail ? "TravelMates_EmailOTP" : "TravelMates_PhoneOTP";
                         MySqlParameter[] otpParam = new MySqlParameter[]
                         {
-                    new MySqlParameter("@user_id", userId),
-                    new MySqlParameter("@otp", otp)
+                            new MySqlParameter("@user_id", userId),
+                            new MySqlParameter("@otp", otp)
                         };
 
                         var otpQuery = $@"SELECT expires_at, used FROM pc_student.{tableName} WHERE user_id = @user_id AND otp = @otp";
@@ -444,229 +444,313 @@ namespace TravelMate_Api.services
             string tableName = isUsingEmail ? "TravelMates_EmailOTP" : "TravelMates_PhoneOTP";
             MySqlParameter[] updateParams = new MySqlParameter[]
             {
-        new MySqlParameter("@user_id", userId),
-        new MySqlParameter("@otp", otp)
+                new MySqlParameter("@user_id", userId),
+                new MySqlParameter("@otp", otp)
             };
 
             var query = $@"UPDATE pc_student.{tableName} SET used = TRUE WHERE user_id = @user_id AND otp = @otp";
             ds.executeSQL(query, updateParams);
         }
 
+        public async Task<responseData> ForgotPassword(requestData rData)
+        {
+            responseData resData = new responseData();
+            try
+            {
+                bool isUsingEmail = rData.addInfo.ContainsKey("email") && !string.IsNullOrWhiteSpace(rData.addInfo["email"].ToString());
+                bool isUsingPhone = rData.addInfo.ContainsKey("phone_number") && !string.IsNullOrWhiteSpace(rData.addInfo["phone_number"].ToString());
 
+                if (!isUsingEmail && !isUsingPhone)
+                {
+                    resData.rData["rMessage"] = "Invalid request. Please provide either email or phone_number.";
+                    resData.rData["rCode"] = 1;
+                    return resData;
+                }
+
+                string queryField = isUsingEmail ? "email" : "phone_number";
+                string fieldValue = isUsingEmail ? rData.addInfo["email"].ToString() : rData.addInfo["phone_number"].ToString();
+
+                // Fetch user details from database
+                MySqlParameter[] myParam = new MySqlParameter[]
+                {
+                    new MySqlParameter($"@{queryField}", fieldValue)
+                };
+
+                var query = $@"SELECT user_id, email_verified, phone_verified FROM pc_student.TravelMates_Users WHERE {queryField} = @{queryField}";
+                List<List<object[]>> dbDataList = ds.executeSQL(query, myParam);
+
+                if (dbDataList != null && dbDataList.Count > 0)
+                {
+                    List<object[]> dbData = dbDataList[0];
+
+                    if (dbData.Count > 0)
+                    {
+                        int userId = Convert.ToInt32(dbData[0][0]);
+                        bool emailVerified = Convert.ToBoolean(dbData[0][1]);
+                        bool phoneVerified = Convert.ToBoolean(dbData[0][2]);
+
+                        // Check if email or phone is verified
+                        if (isUsingEmail && !emailVerified)
+                        {
+                            resData.rData["rCode"] = 1;
+                            resData.rData["rMessage"] = "Email not verified. Please verify your email.";
+                            
+                            return resData;
+                        }
+
+                        if (isUsingPhone && !phoneVerified)
+                        {
+                            resData.rData["rCode"] = 1;
+                            resData.rData["rMessage"] = "Phone number not verified. Please verify your phone number.";
+                           
+                            return resData;
+                        }
+
+                        // Generate OTP
+                        string otp = GenerateOtp();
+
+                        // Store OTP in database and get the inserted ID
+                        int otpId = StoreOtp(userId, otp, isUsingEmail);
+
+                        // Log the inserted OTP ID
+                        string idType = isUsingEmail ? "email_id" : "phone_id";
+                        Console.WriteLine($"{idType} for OTP: {otpId}");
+
+                        // Send OTP to user's email or phone number
+                        bool isSent = isUsingEmail ? await SendOtpToEmail(fieldValue, otp) : await SendOtpToPhone(fieldValue, otp);
+
+                        if (isSent)
+                        {
+                            resData.rData["rCode"] = 0;
+                            resData.rData["rMessage"] = "OTP sent successfully.";
+                            resData.rData["user_Id"] = userId;
+                        }
+                        else
+                        {
+                            resData.rData["rCode"] = 1;
+                            resData.rData["rMessage"] = "Failed to send OTP. Please try again.";
+                        }
+                    }
+                    else
+                    {
+                        resData.rData["rCode"] = 1;
+                        resData.rData["rMessage"] = "User not found. Please sign up.";
+                    }
+                }
+                else
+                {
+                    resData.rData["rCode"] = 1;
+                    resData.rData["rMessage"] = "User not found. Please sign up.";
+                }
+            }
+            catch (Exception ex)
+            {
+                resData.rData["rCode"] = 1;
+                resData.rData["rMessage"] = "An error occurred: " + ex.Message;
+                // Log the exception
+                Console.WriteLine(ex.ToString());
+            }
+            return resData;
+        }
+
+
+        public async Task<responseData> VerifyOtpForForgotPassword(requestData rData)
+        {
+            responseData resData = new responseData();
+            try
+            {
+                bool isUsingEmail = rData.addInfo.ContainsKey("email") && !string.IsNullOrWhiteSpace(rData.addInfo["email"].ToString());
+                bool isUsingPhone = rData.addInfo.ContainsKey("phone_number") && !string.IsNullOrWhiteSpace(rData.addInfo["phone_number"].ToString());
+
+                if (!isUsingEmail && !isUsingPhone)
+                {
+                    resData.rData["rMessage"] = "Invalid request. Please provide either email or phone_number.";
+                    resData.rData["rCode"] = 1;
+                    return resData;
+                }
+
+                string queryField = isUsingEmail ? "email" : "phone_number";
+                string fieldValue = isUsingEmail ? rData.addInfo["email"].ToString() : rData.addInfo["phone_number"].ToString();
+                string otp = rData.addInfo["otp"].ToString();
+
+                // Fetch user and OTP details from database
+                MySqlParameter[] myParam = new MySqlParameter[]
+                {
+                    new MySqlParameter($"@{queryField}", fieldValue)
+                };
+
+                var userQuery = $@"SELECT user_id FROM pc_student.TravelMates_Users WHERE {queryField} = @{queryField}";
+                List<List<object[]>> dbDataList = ds.executeSQL(userQuery, myParam);
+
+                if (dbDataList != null && dbDataList.Count > 0)
+                {
+                    List<object[]> dbData = dbDataList[0];
+
+                    if (dbData.Count > 0)
+                    {
+                        int userId = Convert.ToInt32(dbData[0][0]);
+
+                        string tableName = isUsingEmail ? "TravelMates_EmailOTP" : "TravelMates_PhoneOTP";
+                        MySqlParameter[] otpParam = new MySqlParameter[]
+                        {
+                            new MySqlParameter("@user_id", userId),
+                            new MySqlParameter("@otp", otp)
+                        };
+
+                        var otpQuery = $@"SELECT expires_at, used FROM pc_student.{tableName} WHERE user_id = @user_id AND otp = @otp";
+                        List<List<object[]>> otpDataList = ds.executeSQL(otpQuery, otpParam);
+
+                        if (otpDataList != null && otpDataList.Count > 0)
+                        {
+                            List<object[]> otpData = otpDataList[0];
+
+                            if (otpData.Count > 0)
+                            {
+                                DateTime expiresAt = Convert.ToDateTime(otpData[0][0]);
+                                bool used = Convert.ToBoolean(otpData[0][1]);
+
+                                if (used)
+                                {
+                                    resData.rData["rCode"] = 1;
+                                    resData.rData["rMessage"] = "OTP has already been used.";
+                                    return resData;
+                                }
+
+                                if (DateTime.Now > expiresAt)
+                                {
+                                    resData.rData["rCode"] = 1;
+                                    resData.rData["rMessage"] = "OTP has expired.";
+                                    return resData;
+                                }
+
+
+
+                                // Mark OTP as used
+                                MarkOtpAsUsed(userId, otp, isUsingEmail);
+
+                                resData.rData["rCode"] = 0;
+                                resData.rData["rMessage"] = "Otp verified successfully.";
+                                resData.rData["user_id"] = userId;
+
+                            }
+                            else
+                            {
+                                resData.rData["rCode"] = 1;
+                                resData.rData["rMessage"] = "Invalid OTP.";
+                            }
+                        }
+                        else
+                        {
+                            resData.rData["rCode"] = 1;
+                            resData.rData["rMessage"] = "Invalid OTP.";
+                        }
+                    }
+                    else
+                    {
+                        resData.rData["rCode"] = 1;
+                        resData.rData["rMessage"] = "User not found.";
+                    }
+                }
+                else
+                {
+                    resData.rData["rCode"] = 1;
+                    resData.rData["rMessage"] = "User not found.";
+                }
+            }
+            catch (Exception ex)
+            {
+                resData.rData["rCode"] = 1;
+                resData.rData["rMessage"] = "An error occurred: " + ex.Message;
+                // Log the exception
+                Console.WriteLine(ex.ToString());
+            }
+            return resData;
+        }
+        public async Task<responseData> ResetPassword(requestData rData)
+        {
+            responseData resData = new responseData();
+            try
+            {
+                // Check for email or phone number
+                bool isUsingEmail = rData.addInfo.ContainsKey("email") && !string.IsNullOrWhiteSpace(rData.addInfo["email"].ToString());
+                bool isUsingPhone = rData.addInfo.ContainsKey("phone_number") && !string.IsNullOrWhiteSpace(rData.addInfo["phone_number"].ToString());
+                bool hasUserId = rData.addInfo.ContainsKey("user_id") && !string.IsNullOrWhiteSpace(rData.addInfo["user_id"].ToString());
+
+                if (!hasUserId || (!isUsingEmail && !isUsingPhone))
+                {
+                    resData.rData["rMessage"] = "Invalid request. Please provide user_id and either email or phone number.";
+                    resData.rData["rCode"] = 1;
+                    return resData;
+                }
+
+                int userId = Convert.ToInt32(rData.addInfo["user_id"].ToString());
+                string newPassword = rData.addInfo["new_password"].ToString();
+
+                string queryField = isUsingEmail ? "email" : "phone_number";
+                string fieldValue = isUsingEmail ? rData.addInfo["email"].ToString() : rData.addInfo["phone_number"].ToString();
+
+                // Fetch user details from database
+                MySqlParameter[] myParam = new MySqlParameter[]
+                {
+            new MySqlParameter("@user_id", userId),
+            new MySqlParameter($"@{queryField}", fieldValue)
+                };
+
+                var query = $@"SELECT user_id FROM pc_student.TravelMates_Users WHERE user_id = @user_id AND {queryField} = @{queryField}";
+                List<List<object[]>> dbDataList = ds.executeSQL(query, myParam);
+
+                if (dbDataList != null && dbDataList.Count > 0)
+                {
+                    List<object[]> dbData = dbDataList[0];
+
+                    if (dbData.Count > 0)
+                    {
+                        // Update password
+                        MySqlParameter[] updateParam = new MySqlParameter[]
+                        {
+                    new MySqlParameter("@user_id", userId),
+                    new MySqlParameter("@new_password", newPassword) // Ensure to hash the password before storing it
+                        };
+
+                        var updateQuery = "UPDATE pc_student.TravelMates_Users SET password = @new_password WHERE user_id = @user_id";
+                        int rowsAffected = ds.executeSQL(updateQuery, updateParam).Count; // Fix: Ensure executeSQL returns rows affected count
+
+                        if (rowsAffected > 0)
+                        {
+                            resData.rData["rCode"] = 0;
+                            resData.rData["rMessage"] = "Password reset successfully.";
+                             resData.rData["user_Id"] = userId;
+                        }
+                        else
+                        {
+                            resData.rData["rCode"] = 1;
+                            resData.rData["rMessage"] = "Failed to reset password. Please try again.";
+                        }
+                    }
+                    else
+                    {
+                        resData.rData["rCode"] = 1;
+                        resData.rData["rMessage"] = "User ID does not match the provided email or phone number.";
+                    }
+                }
+                else
+                {
+                    resData.rData["rCode"] = 1;
+                    resData.rData["rMessage"] = "User not found.";
+                }
+            }
+            catch (Exception ex)
+            {
+                resData.rData["rCode"] = 1;
+                resData.rData["rMessage"] = "An error occurred: " + ex.Message;
+                // Log the exception
+                Console.WriteLine(ex.ToString());
+            }
+            return resData;
+        }
 
 
     }
 
 }
 
-
-
-//     public async Task<responseData> UserSignIn_UsingPassword(requestData rData)
-// {
-//     responseData resData = new responseData();
-//     try
-//     {
-//         bool isUsingEmail = rData.addInfo.ContainsKey("email") && rData.addInfo.ContainsKey("password");
-//         bool isUsingPhone = rData.addInfo.ContainsKey("phone_number") && rData.addInfo.ContainsKey("password");
-//         bool isUsingOtp = (rData.addInfo.ContainsKey("email") || rData.addInfo.ContainsKey("phone_number")) && rData.addInfo.ContainsKey("otp");
-
-//         if (!isUsingEmail && !isUsingPhone && !isUsingOtp)
-//         {
-//             resData.rData["rMessage"] = "Invalid request. Please provide either email/password, phone_number/password, or email/phone_number/otp.";
-//             resData.rData["rCode"] = 1;
-//             return resData;
-//         }
-
-//         // Determine query field and value based on input type
-//         string queryField = isUsingEmail ? "email" : isUsingPhone ? "phone_number" : rData.addInfo.ContainsKey("email") ? "email" : "phone_number";
-//         string fieldValue = rData.addInfo[queryField].ToString();
-
-//         // Fetch user details from database
-//         MySqlParameter[] myParam = new MySqlParameter[]
-//         {
-//             new MySqlParameter($"@{queryField}", fieldValue)
-//         };
-
-//         var query = $@"SELECT user_id, password, email_verified, phone_verified FROM pc_student.TravelMates_Users WHERE {queryField} = @{queryField}";
-//         List<List<object[]>> dbDataList = ds.executeSQL(query, myParam);
-
-//         if (dbDataList != null && dbDataList.Count > 0)
-//         {
-//             List<object[]> dbData = dbDataList[0];
-
-//             if (dbData.Count > 0)
-//             {
-//                 int userId = Convert.ToInt32(dbData[0][0]);
-//                 string storedPassword = dbData[0][1].ToString();
-//                 bool emailVerified = Convert.ToBoolean(dbData[0][2]);
-//                 bool phoneVerified = Convert.ToBoolean(dbData[0][3]);
-
-//                 // Check if email is verified
-//                 if (isUsingEmail && !emailVerified)
-//                 {
-//                     resData.rData["rCode"] = 1;
-//                     resData.rData["rMessage"] = "Email not verified. Please verify your email.";
-//                     return resData;
-//                 }
-
-//                 // Check if phone number is verified
-//                 if (isUsingPhone && !phoneVerified)
-//                 {
-//                     resData.rData["rCode"] = 1;
-//                     resData.rData["rMessage"] = "Phone number not verified. Please verify your phone number.";
-//                     return resData;
-//                 }
-
-//                 if (isUsingOtp)
-//                 {
-//                     string otp = rData.addInfo["otp"].ToString();
-//                     bool otpValid = ValidateOtp(queryField == "phone_number", fieldValue, otp);
-
-//                     if (otpValid)
-//                     {
-//                         // Generate JWT token
-//                         var token = GenerateJwtToken(userId, fieldValue);
-
-//                         // Store the token in the database
-//                         StoreToken(userId, token);
-
-//                         resData.rData["rCode"] = 0;
-//                         resData.rData["rMessage"] = "Login successful.";
-//                         resData.rData["user_id"] = userId;
-//                         resData.rData["token"] = token;
-
-//                         // Clear OTP from database after successful login
-//                         ClearOtp(queryField == "phone_number", fieldValue);
-//                     }
-//                     else
-//                     {
-//                         resData.rData["rCode"] = 1;
-//                         resData.rData["rMessage"] = "Invalid OTP. Please try again.";
-//                     }
-//                 }
-//                 else if (storedPassword == rData.addInfo["password"].ToString())
-//                 {
-//                     // Generate JWT token
-//                     var token = GenerateJwtToken(userId, fieldValue);
-
-//                     // Store the token in the database
-//                     StoreToken(userId, token);
-
-//                     resData.rData["rCode"] = 0;
-//                     resData.rData["rMessage"] = "Login successful.";
-//                     resData.rData["user_id"] = userId;
-//                     resData.rData["token"] = token;
-//                 }
-//                 else
-//                 {
-//                     resData.rData["rCode"] = 1;
-//                     resData.rData["rMessage"] = "Incorrect password.";
-//                 }
-//             }
-//             else
-//             {
-//                 resData.rData["rCode"] = 1;
-//                 resData.rData["rMessage"] = "User not found. Please sign up.";
-//             }
-//         }
-//         else
-//         {
-//             resData.rData["rCode"] = 1;
-//             resData.rData["rMessage"] = "User not found. Please sign up.";
-//         }
-//     }
-//     catch (Exception ex)
-//     {
-//         resData.rData["rMessage"] = "An error occurred: " + ex.Message;
-//         // Log the exception
-//     }
-//     return resData;
-// }
-
-// private bool ValidateOtp(bool isUsingPhone, string identifier, string otp)
-// {
-//     MySqlParameter[] myParam = new MySqlParameter[]
-//     {
-//         new MySqlParameter(isUsingPhone ? "@phone_number" : "@email", identifier)
-//     };
-
-//     var query = isUsingPhone ?
-//         @"SELECT otp FROM pc_student.TravelMates_PhoneOTP WHERE phone_number = @phone_number" :
-//         @"SELECT otp FROM pc_student.TravelMates_EmailOTP WHERE email = @email";
-
-//     List<List<object[]>> dbDataList = ds.executeSQL(query, myParam);
-
-//     if (dbDataList != null && dbDataList.Count > 0)
-//     {
-//         List<object[]> dbData = dbDataList[0];
-//         if (dbData.Count > 0)
-//         {
-//             string storedOtp = dbData[0][0].ToString();
-//             return otp == storedOtp;
-//         }
-//     }
-//     return false;
-// }
-
-// private void ClearOtp(bool isUsingPhone, string identifier)
-// {
-//     MySqlParameter[] myParam = new MySqlParameter[]
-//     {
-//         new MySqlParameter(isUsingPhone ? "@phone_number" : "@email", identifier)
-//     };
-
-//     var query = isUsingPhone ?
-//         @"DELETE FROM pc_student.TravelMates_PhoneOTP WHERE phone_number = @phone_number" :
-//         @"DELETE FROM pc_student.TravelMates_EmailOTP WHERE email = @email";
-
-//     ds.ExecuteSQLName(query, myParam);
-// }
-
-// private string GenerateJwtToken(int userId, string identifier)
-// {
-//     byte[] keyBytes = new byte[32]; // 256 bits = 32 bytes
-//     using (var rng = new RNGCryptoServiceProvider())
-//     {
-//         rng.GetBytes(keyBytes);
-//     }
-//     var base64Key = Convert.ToBase64String(keyBytes);
-
-//     var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(base64Key));
-//     var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
-
-//     var claims = new[]
-//     {
-//         new Claim(JwtRegisteredClaimNames.Sub, identifier),
-//         new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-//         new Claim("userId", userId.ToString())
-//     };
-
-//     var token = new JwtSecurityToken(
-//         issuer: "yourIssuer",
-//         audience: "yourAudience",
-//         claims: claims,
-//         expires: DateTime.Now.AddHours(2),
-//         signingCredentials: credentials);
-
-//     return new JwtSecurityTokenHandler().WriteToken(token);
-// }
-
-// private void StoreToken(int userId, string token)
-// {
-//     DateTime issuedAt = DateTime.Now;
-//     DateTime expiresAt = issuedAt.AddHours(2);
-
-//     MySqlParameter[] insertParams = new MySqlParameter[]
-//     {
-//         new MySqlParameter("@user_id", userId),
-//         new MySqlParameter("@token", token),
-//         new MySqlParameter("@issued_at", issuedAt),
-//         new MySqlParameter("@expires_at", expiresAt),
-//         new MySqlParameter("@revoked", false)
-//     };
-
-//     var query = @"INSERT INTO pc_student.TravelMates_TokenStore (user_id, token, issued_at, expires_at, revoked) 
-//                   VALUES (@user_id, @token, @issued_at, @expires_at, @revoked)";
-
-//     ds.ExecuteSQLName(query, insertParams);
-// }
