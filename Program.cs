@@ -13,6 +13,8 @@ ConfigureServices(s =>
     s.AddSingleton<login>();
     s.AddSingleton<TravelMates_Users>();
     s.AddSingleton<TravelMates_SignIn>();
+    s.AddSingleton<TravelMates_UserProfiles>();
+
 
    
     s.AddSingleton<upload>();
@@ -44,6 +46,7 @@ ConfigureServices(s =>
         var login = e.ServiceProvider.GetRequiredService<login>();
         var TravelMates_Users = e.ServiceProvider.GetRequiredService<TravelMates_Users>();
         var TravelMates_SignIn = e.ServiceProvider.GetRequiredService<TravelMates_SignIn>();
+        var TravelMates_UserProfiles = e.ServiceProvider.GetRequiredService<TravelMates_UserProfiles>();
        
  
         var upload = e.ServiceProvider.GetRequiredService<upload>();
@@ -94,6 +97,32 @@ ConfigureServices(s =>
 
 
      });
+
+     e.MapPost("TravelMates_UserProfiles",
+     [AllowAnonymous] async (HttpContext http) =>
+     {
+         var body = await new StreamReader(http.Request.Body).ReadToEndAsync();
+         requestData rData = JsonSerializer.Deserialize<requestData>(body);
+         if (rData.eventID == "1001") // UpdateUserProfileImage
+             await http.Response.WriteAsJsonAsync(await TravelMates_UserProfiles.UpdateUserProfileImage(rData));
+         if (rData.eventID == "1002") // DeleteProfile
+             await http.Response.WriteAsJsonAsync(await TravelMates_UserProfiles.DeleteProfile(rData));
+        if (rData.eventID == "1003") // VerifyOtpForLogin
+             await http.Response.WriteAsJsonAsync(await TravelMates_UserProfiles.ReadProfile(rData));
+         if (rData.eventID == "1004") // CreateProfile
+             await http.Response.WriteAsJsonAsync(await TravelMates_UserProfiles.CreateProfile(rData));
+         if (rData.eventID == "1005") // UpdateProfile
+             await http.Response.WriteAsJsonAsync(await TravelMates_UserProfiles.UpdateProfile(rData));
+         if (rData.eventID == "1006") // DeleteProfile
+             await http.Response.WriteAsJsonAsync(await TravelMates_UserProfiles.DeleteProfile(rData));
+         if (rData.eventID == "1007") // UpdateProfile
+             await http.Response.WriteAsJsonAsync(await TravelMates_UserProfiles.GetUserProfile(rData));
+         if (rData.eventID == "1008") // DeleteProfile
+             await http.Response.WriteAsJsonAsync(await TravelMates_UserProfiles.UpdateUserProfile(rData));
+
+
+     });
+
 
    
        
