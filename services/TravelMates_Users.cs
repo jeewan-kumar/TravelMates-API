@@ -46,7 +46,7 @@ namespace TravelMate_Api.services
                     if (dbData.Count > 0)
                     {
                         int emailVerifiedInt, phoneVerifiedInt;
-                        if (int.TryParse(dbData[0][8].ToString(), out emailVerifiedInt) && int.TryParse(dbData[0][7].ToString(), out phoneVerifiedInt))
+                        if (int.TryParse(dbData[0][9].ToString(), out emailVerifiedInt) && int.TryParse(dbData[0][8].ToString(), out phoneVerifiedInt))
                         {
                             emailVerified = Convert.ToBoolean(emailVerifiedInt);
                             phoneVerified = Convert.ToBoolean(phoneVerifiedInt);
@@ -69,6 +69,9 @@ namespace TravelMate_Api.services
                 DateTime dateOfBirth = DateTime.ParseExact(dateOfBirthInput, "dd-MM-yyyy", null);
                 string formattedDateOfBirth = dateOfBirth.ToString("yyyy-MM-dd");
 
+                 int age = DateTime.Today.Year - dateOfBirth.Year;
+                if (dateOfBirth > DateTime.Today.AddYears(-age)) age--;
+
                 // Insert or update user details
                 MySqlParameter[] insertParams = new MySqlParameter[]
                 {
@@ -76,6 +79,7 @@ namespace TravelMate_Api.services
                     new MySqlParameter("@phone_number", req.addInfo["phone_number"].ToString()),
                     new MySqlParameter("@email", req.addInfo["email"].ToString()),
                     new MySqlParameter("@date_of_birth", formattedDateOfBirth),
+                     new MySqlParameter("@age", age),
                     // new MySqlParameter("@date_of_birth", req.addInfo["date_of_birth"].ToString()),
                     new MySqlParameter("@password", req.addInfo["password"].ToString()),
                     new MySqlParameter("@phone_verified", false),
@@ -83,10 +87,10 @@ namespace TravelMate_Api.services
                 };
 
                 var sq = @"INSERT INTO pc_student.TravelMates_Users 
-                    (full_name, email, phone_number, date_of_birth, password, phone_verified, email_verified) 
-                    VALUES (@full_name, @email, @phone_number, @date_of_birth, @password, @phone_verified, @email_verified)
+                    (full_name, email, phone_number, date_of_birth, age, password, phone_verified, email_verified) 
+                    VALUES (@full_name, @email, @phone_number, @date_of_birth, @age, @password, @phone_verified, @email_verified)
                     ON DUPLICATE KEY UPDATE
-                    full_name=@full_name, date_of_birth=@date_of_birth, password=@password, phone_verified=false, email_verified=false";
+                    full_name=@full_name, date_of_birth=@date_of_birth, age=@age,password=@password, phone_verified=false, email_verified=false";
 
                 var insertResult = ds.ExecuteInsertAndGetLastId(sq, insertParams);
 
@@ -376,9 +380,9 @@ namespace TravelMate_Api.services
                 {
                     var phoneParams = new MySqlParameter[]
                     {
-                new MySqlParameter("@otp", phoneOtp),
-                new MySqlParameter("@phoneotp_id", phoneOtpId),
-                new MySqlParameter("@user_id", userId)
+                        new MySqlParameter("@otp", phoneOtp),
+                        new MySqlParameter("@phoneotp_id", phoneOtpId),
+                        new MySqlParameter("@user_id", userId)
                     };
                     var phoneQuery = @"SELECT * FROM pc_student.TravelMates_PhoneVerification 
                                WHERE phoneotp_id=@phoneotp_id AND phone_otp=@otp AND expires_at > NOW()";
