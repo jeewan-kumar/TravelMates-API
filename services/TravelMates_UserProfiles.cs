@@ -103,81 +103,62 @@ namespace COMMON_PROJECT_STRUCTURE_API.services
             }
             return resData;
         }
-
         public async Task<responseData> UpdateProfile(requestData req)
         {
             responseData resData = new responseData();
             try
             {
-                byte[] imageData = null;
-
-                // Handle profile picture if it is provided
-                if (req.addInfo.ContainsKey("profile_picture") && !string.IsNullOrEmpty(req.addInfo["profile_picture"].ToString()))
+                // Check if addInfo and necessary keys are present
+                if (req.addInfo == null || !req.addInfo.ContainsKey("user_id"))
                 {
-                    var filePath = req.addInfo["profile_picture"].ToString();
-                    if (File.Exists(filePath))
-                    {
-                        imageData = File.ReadAllBytes(filePath);
-                    }
-                    else
-                    {
-                        resData.rData["rCode"] = 1;
-                        resData.rData["rMessage"] = "File not found: " + filePath;
-                        return resData;
-                    }
+                    resData.rData["rCode"] = 1;
+                    resData.rData["rMessage"] = "Invalid request data";
+                    return resData;
                 }
 
                 // Prepare parameters for the SQL query
                 List<MySqlParameter> updateParams = new List<MySqlParameter>
         {
             new MySqlParameter("@user_id", req.addInfo["user_id"].ToString()),
-            new MySqlParameter("@full_name", req.addInfo["full_name"].ToString()),
-            new MySqlParameter("@date_of_birth", req.addInfo["date_of_birth"].ToString()),
-             new MySqlParameter("@location", req.addInfo["location"].ToString()),
-            new MySqlParameter("@gender", req.addInfo["gender"].ToString()),
-            new MySqlParameter("@travel_preferences", req.addInfo["travel_preferences"].ToString()),           
-            new MySqlParameter("@travel_types", req.addInfo["travel_types"].ToString()),
-             new MySqlParameter("@traveling_intentions", req.addInfo["traveling_intentions"].ToString()),
-             new MySqlParameter("@job_title", req.addInfo["job_title"].ToString()),
-            new MySqlParameter("@workplace", req.addInfo["workplace"].ToString()),
-            new MySqlParameter("@education", req.addInfo["education"].ToString()),
-            new MySqlParameter("@religious_beliefs", req.addInfo["religious_beliefs"].ToString()),
-            new MySqlParameter("@interests", req.addInfo["interests"].ToString()),
-            new MySqlParameter("@bio", req.addInfo["bio"].ToString()),
+            new MySqlParameter("@profile_picture", req.addInfo["profile_picture"]?.ToString() ?? string.Empty),
+            new MySqlParameter("@full_name", req.addInfo["full_name"]?.ToString() ?? string.Empty),
+            new MySqlParameter("@date_of_birth", req.addInfo["date_of_birth"]?.ToString() ?? string.Empty),
+            new MySqlParameter("@location", req.addInfo["location"]?.ToString() ?? string.Empty),
+            new MySqlParameter("@gender", req.addInfo["gender"]?.ToString() ?? string.Empty),
+            new MySqlParameter("@travel_preferences", req.addInfo["travel_preferences"]?.ToString() ?? string.Empty),
+            new MySqlParameter("@travel_types", req.addInfo["travel_types"]?.ToString() ?? string.Empty),
+            new MySqlParameter("@traveling_intentions", req.addInfo["traveling_intentions"]?.ToString() ?? string.Empty),
+            new MySqlParameter("@job_title", req.addInfo["job_title"]?.ToString() ?? string.Empty),
+            new MySqlParameter("@workplace", req.addInfo["workplace"]?.ToString() ?? string.Empty),
+            new MySqlParameter("@education", req.addInfo["education"]?.ToString() ?? string.Empty),
+            new MySqlParameter("@religious_beliefs", req.addInfo["religious_beliefs"]?.ToString() ?? string.Empty),
+            new MySqlParameter("@interests", req.addInfo["interests"]?.ToString() ?? string.Empty),
+            new MySqlParameter("@bio", req.addInfo["bio"]?.ToString() ?? string.Empty),
         };
 
-                if (imageData != null)
-                {
-                    updateParams.Add(new MySqlParameter("@profile_picture", MySqlDbType.Blob) { Value = imageData });
-                }
-                else
-                {
-                    updateParams.Add(new MySqlParameter("@profile_picture", DBNull.Value));
-                }
-
-                // SQL query to update record
+                // SQL query to update the record
                 var updateQuery = @"
-                UPDATE pc_student.TravelMates_Users 
-                SET profile_picture = @profile_picture, 
-                    full_name = @full_name, 
-                    date_of_birth = @date_of_birth, 
-                    location = @location,
-                    gender = @gender, 
-                    travel_preferences = @travel_preferences,
-                    travel_types = @travel_types,
-                    traveling_intentions = @traveling_intentions,
-                    job_title = @job_title,
-                    workplace = @workplace,
-                    education = @education,
-                    religious_beliefs = @religious_beliefs,
-                    interests = @interests,
-                    bio = @bio
-                WHERE user_id = @user_id";
+            UPDATE pc_student.TravelMates_Users 
+            SET profile_picture = @profile_picture,
+                full_name = @full_name, 
+                date_of_birth = @date_of_birth, 
+                location = @location,
+                gender = @gender, 
+                travel_preferences = @travel_preferences,
+                travel_types = @travel_types,
+                traveling_intentions = @traveling_intentions,
+                job_title = @job_title,
+                workplace = @workplace,
+                education = @education,
+                religious_beliefs = @religious_beliefs,
+                interests = @interests,
+                bio = @bio
+            WHERE user_id = @user_id";
 
                 // Execute SQL update query
                 var updateResult = ds.executeSQL(updateQuery, updateParams.ToArray());
 
-                // Check if update was successful
+                // Check if the update was successful
                 if (updateResult == null || !updateResult.Any())
                 {
                     resData.rData["rCode"] = 1;
@@ -193,6 +174,7 @@ namespace COMMON_PROJECT_STRUCTURE_API.services
             {
                 resData.rData["rCode"] = 1;
                 resData.rData["rMessage"] = "An error occurred: " + ex.Message;
+                // Log exception details here for debugging
             }
             return resData;
         }
