@@ -109,8 +109,8 @@ ConfigureServices(s =>
              await http.Response.WriteAsJsonAsync(await TravelMates_UserProfiles.DeleteProfile(rData));
         if (rData.eventID == "1003") // VerifyOtpForLogin
              await http.Response.WriteAsJsonAsync(await TravelMates_UserProfiles.ReadProfile(rData));
-         if (rData.eventID == "1004") // CreateProfile
-             await http.Response.WriteAsJsonAsync(await TravelMates_UserProfiles.CreateProfile(rData));
+         if (rData.eventID == "1004") // GetRandomUserProfiles
+             await http.Response.WriteAsJsonAsync(await TravelMates_UserProfiles.GetRandomUserProfiles(rData));
          if (rData.eventID == "1005") // UpdateProfile
              await http.Response.WriteAsJsonAsync(await TravelMates_UserProfiles.UpdateProfile(rData));
          if (rData.eventID == "1006") // DeleteProfile

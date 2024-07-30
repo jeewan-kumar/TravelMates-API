@@ -7,60 +7,89 @@ namespace COMMON_PROJECT_STRUCTURE_API.services
     public class TravelMates_UserProfiles
     {
         dbServices ds = new dbServices();
-        public async Task<responseData> CreateProfile(requestData req)
+        public async Task<responseData> GetRandomUserProfiles(requestData req)
         {
-            responseData resData = new responseData();
+            var resData = new responseData();
             try
             {
-                // Check if required parameters are present in the request
-                if (!req.addInfo.ContainsKey("skillup_id") ||
-                    !req.addInfo.ContainsKey("profile_picture") ||
-                    !req.addInfo.ContainsKey("first_name") ||
-                    !req.addInfo.ContainsKey("last_name") ||
-                    !req.addInfo.ContainsKey("date_of_birth") ||
-                    !req.addInfo.ContainsKey("gender") ||
-                    !req.addInfo.ContainsKey("bio"))
+                // List of SQL parameters for filtering
+                var filterParams = new List<MySqlParameter>();
+                var filters = new List<string>();
+
+                // Add filters based on the provided request data
+                if (req.addInfo.TryGetValue("location", out var location) && !string.IsNullOrEmpty(location.ToString()))
                 {
-                    resData.rData["rCode"] = 1;
-                    resData.rData["rMessage"] = "Missing required parameters";
-                    return resData;
+                    filters.Add("location = @location");
+                    filterParams.Add(new MySqlParameter("@location", location.ToString()));
+                }
+                if (req.addInfo.TryGetValue("gender", out var gender) && !string.IsNullOrEmpty(gender.ToString()))
+                {
+                    filters.Add("gender = @gender");
+                    filterParams.Add(new MySqlParameter("@gender", gender.ToString()));
+                }
+                if (req.addInfo.TryGetValue("travel_preferences", out var travelPreferences) && !string.IsNullOrEmpty(travelPreferences.ToString()))
+                {
+                    filters.Add("travel_preferences = @travel_preferences");
+                    filterParams.Add(new MySqlParameter("@travel_preferences", travelPreferences.ToString()));
+                }
+                if (req.addInfo.TryGetValue("travel_types", out var travelTypes) && !string.IsNullOrEmpty(travelTypes.ToString()))
+                {
+                    filters.Add("travel_types = @travel_types");
+                    filterParams.Add(new MySqlParameter("@travel_types", travelTypes.ToString()));
+                }
+                if (req.addInfo.TryGetValue("traveling_intentions", out var travelingIntentions) && !string.IsNullOrEmpty(travelingIntentions.ToString()))
+                {
+                    filters.Add("traveling_intentions = @traveling_intentions");
+                    filterParams.Add(new MySqlParameter("@traveling_intentions", travelingIntentions.ToString()));
+                }
+                if (req.addInfo.TryGetValue("job_title", out var jobTitle) && !string.IsNullOrEmpty(jobTitle.ToString()))
+                {
+                    filters.Add("job_title = @job_title");
+                    filterParams.Add(new MySqlParameter("@job_title", jobTitle.ToString()));
+                }
+                if (req.addInfo.TryGetValue("workplace", out var workplace) && !string.IsNullOrEmpty(workplace.ToString()))
+                {
+                    filters.Add("workplace = @workplace");
+                    filterParams.Add(new MySqlParameter("@workplace", workplace.ToString()));
+                }
+                if (req.addInfo.TryGetValue("education", out var education) && !string.IsNullOrEmpty(education.ToString()))
+                {
+                    filters.Add("education = @education");
+                    filterParams.Add(new MySqlParameter("@education", education.ToString()));
                 }
 
-                MySqlParameter[] insertParams = new MySqlParameter[]
+                // Add age filter if specified
+                if (req.addInfo.TryGetValue("min_age", out var minAge) && !string.IsNullOrEmpty(minAge.ToString()) &&
+                    req.addInfo.TryGetValue("max_age", out var maxAge) && !string.IsNullOrEmpty(maxAge.ToString()))
                 {
-            new MySqlParameter("@skillup_id", req.addInfo["skillup_id"].ToString()),
-            new MySqlParameter("@profile_picture",req.addInfo["profile_picture"].ToString()),
-            new MySqlParameter("@first_name", req.addInfo["first_name"].ToString()),
-            new MySqlParameter("@last_name", req.addInfo["last_name"].ToString()),
-            new MySqlParameter("@date_of_birth", req.addInfo["date_of_birth"].ToString()),
-            new MySqlParameter("@gender", req.addInfo["gender"].ToString()),
-            new MySqlParameter("@bio", req.addInfo["bio"].ToString())
-                };
+                    filters.Add("TIMESTAMPDIFF(YEAR, date_of_birth, CURDATE()) BETWEEN @min_age AND @max_age");
+                    filterParams.Add(new MySqlParameter("@min_age", Convert.ToInt32(minAge)));
+                    filterParams.Add(new MySqlParameter("@max_age", Convert.ToInt32(maxAge)));
+                }
 
-                // Define the SQL query for insertion
-                string query = @"
-            INSERT INTO pc_student.Skillup_UserProfile
-                (skillup_id, profile_picture, first_name, last_name, date_of_birth, gender, bio)
-            VALUES
-                (@skillup_id, @profile_picture, @first_name, @last_name, @date_of_birth, @gender, @bio)
-        ";
+                // Construct the SQL query with the filters
+                var filterQuery = filters.Count > 0 ? "WHERE " + string.Join(" AND ", filters) : "";
+                var selectQuery = $@"
+                    SELECT full_name, profile_picture, 
+                        TIMESTAMPDIFF(YEAR, date_of_birth, CURDATE()) AS age, 
+                        job_title
+                    FROM pc_student.TravelMates_Users 
+                    {filterQuery}
+                    ORDER BY RAND()";
 
-                // Execute the SQL query
-                var insertResult = ds.executeSQL(query, insertParams);
+                // Execute the query and retrieve results
+                var selectResult = ds.executeSQL(selectQuery, filterParams.ToArray());
 
-                // Check if insertion was successful
-                if (insertResult == null || !insertResult.Any())
+                if (selectResult == null || selectResult.Count == 0)
                 {
                     resData.rData["rCode"] = 1;
-                    resData.rData["rMessage"] = "Failed to create user profile";
-
+                    resData.rData["rMessage"] = "No users found";
                 }
                 else
                 {
                     resData.rData["rCode"] = 0;
-                    resData.rData["rMessage"] = "User profile created successfully";
-                    // resData.rData["id"]=insertResult[0][0]["skillup_id"]int.TryParse;
-
+                    resData.rData["rMessage"] = "Users retrieved successfully";
+                    resData.rData["users"] = selectResult;
                 }
             }
             catch (Exception ex)
@@ -68,8 +97,11 @@ namespace COMMON_PROJECT_STRUCTURE_API.services
                 resData.rData["rCode"] = 1;
                 resData.rData["rMessage"] = "An error occurred: " + ex.Message;
             }
+
             return resData;
         }
+        
+
 
         public async Task<responseData> ReadProfile(requestData req)
         {
